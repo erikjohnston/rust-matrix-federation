@@ -37,7 +37,7 @@ pub fn sign_request_b64(
     let val = builder.unwrap();
 
     let obj = val.as_object().unwrap();
-    try!(signedjson::get_sig_for_json_b64(key, obj))
+    Ok(try!(signedjson::get_sig_for_json_b64(key, obj)))
 }
 
 
