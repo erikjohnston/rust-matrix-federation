@@ -15,6 +15,7 @@ pub mod signedjson;
 use serde_json::builder;
 
 
+/// Compute the signature for an outgoing federation request
 pub fn sign_request_b64(
     key: &signedjson::SigningKey,
     method: String,

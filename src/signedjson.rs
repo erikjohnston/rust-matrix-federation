@@ -60,7 +60,7 @@ impl SigningKey {
     }
 }
 
-
+/// Takes a JSON object, signs it, and adds the signature to the object.
 pub fn sign_json(key: &SigningKey, entity_name: String, json: &mut Object) -> Result<()> {
     let b64sig = try!(get_sig_for_json_b64(key, json));
 
@@ -71,7 +71,7 @@ pub fn sign_json(key: &SigningKey, entity_name: String, json: &mut Object) -> Re
     Ok(())
 }
 
-
+/// Returns the base64 encoded signature for a JSON object
 pub fn get_sig_for_json_b64(key: &SigningKey, json: &Object) -> Result<String> {
     let serialized = if json.contains_key("signatures") {
         let mut j = json.clone();
