@@ -12,7 +12,7 @@ pub fn key_server_response<TZ: chrono::TimeZone>(
         valid_until: &chrono::DateTime<TZ>,
         tls_fingerprint_type: String,
         tls_fingerprint_hash: String,
-) -> value::Value {
+) -> signedjson::Result<value::Value> {
     let valid_until_ts = valid_until.timestamp() * 1000 + valid_until.time().nanosecond() as i64 / 1000000;
 
     let mut val = builder::ObjectBuilder::new()
@@ -31,9 +31,11 @@ pub fn key_server_response<TZ: chrono::TimeZone>(
         .insert_object("old_verify_keys", |builder| builder)
         .unwrap();
 
-    signedjson::sign_json(key, server_name.clone(), val.as_object_mut().unwrap()).unwrap();
+    try!(signedjson::sign_json(
+        key, server_name.clone(), val.as_object_mut().unwrap()
+    ));
 
-    return val;
+    Ok(val)
 }
 
 
@@ -61,7 +63,7 @@ mod tests {
             &valid_until,
             "sha256".to_string(),
             "UifzuekNGuXx1QA1tW8j6GCN5VEgI0bRahv3kDWAdDQ".to_string(),
-        );
+        ).unwrap();
 
         assert_eq!(expected, serde_json::to_string(&resp).unwrap());
     }
