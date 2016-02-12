@@ -59,7 +59,7 @@ mod tests {
 
         let valid_until = chrono::UTC.ymd(2016, 02, 07).and_hms_milli(18, 09, 25, 824);
 
-        let resp = key_server_response(
+        let resp = key_server_v2_response(
             &signing_key,
             &server_name,
             &valid_until,
