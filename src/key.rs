@@ -6,7 +6,7 @@ use chrono;
 use chrono::{Timelike, TimeZone};
 
 
-pub fn key_server_response<TZ: chrono::TimeZone>(
+pub fn key_server_v2_response<TZ: chrono::TimeZone>(
         key: &signedjson::SigningKey,
         server_name: &String,
         valid_until: &chrono::DateTime<TZ>,
