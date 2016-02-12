@@ -1,3 +1,4 @@
+/// Helper functions for the key API
 
 use signedjson;
 
