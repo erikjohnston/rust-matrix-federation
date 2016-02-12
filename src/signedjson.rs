@@ -35,13 +35,17 @@ pub const UNPADDED_BASE64 : base64::Config = base64::Config {
 
 #[derive(Debug, Clone)]
 pub struct SigningKey {
+    /// Public part of ED25519 signing key
     pub public: sign::PublicKey,
+    /// Secret part of ED25519 signing key
     pub secret: sign::SecretKey,
+    /// A unique ID for this signing key.
     pub key_id: String,
 }
 
 
 impl SigningKey {
+    /// Create the signing key from a standard ED25519 seed
     pub fn from_seed(seed: &[u8], key_id: String) -> Option<SigningKey> {
         if let Some(seed) = sign::Seed::from_slice(seed) {
             let (public, secret) = sign::keypair_from_seed(&seed);
@@ -55,6 +59,7 @@ impl SigningKey {
         }
     }
 
+    /// Return a unpadded base64 version of the public key.
     pub fn public_key_b64(&self) -> String {
         self.public.0.to_base64(UNPADDED_BASE64)
     }
