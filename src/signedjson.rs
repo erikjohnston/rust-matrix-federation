@@ -1,4 +1,4 @@
-/// Helper functions for signed json.
+//! Helper functions for signed json.
 
 use std;
 use std::collections::BTreeMap;
