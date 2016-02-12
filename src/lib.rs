@@ -22,7 +22,7 @@ pub fn sign_request_b64(
     origin: String,
     destination: String,
     content: Option<&signedjson::Object>,
-) -> String {
+) -> signedjson::Result<String> {
     let mut builder = builder::ObjectBuilder::new()
         .insert("method", method)
         .insert("uri", uri)
@@ -36,7 +36,7 @@ pub fn sign_request_b64(
     let val = builder.unwrap();
 
     let obj = val.as_object().unwrap();
-    signedjson::get_sig_for_json_b64(key, obj).unwrap()
+    try!(signedjson::get_sig_for_json_b64(key, obj))
 }
 
 
