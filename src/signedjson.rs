@@ -140,43 +140,41 @@ fn test_sign() {
         key_id: "ed25519:1".to_string(),
     };
 
-    {
-        let mut json = serde_json::from_slice::<value::Value>(b"{}").unwrap();
-        sign_json(&sig_key, "domain".to_string(), json.as_object_mut().unwrap()).unwrap();
+    assert_eq!(
+        sign_bytes_json(&sig_key, b"{}"),
+        r#"{"signatures":{"domain":{"ed25519:1":"K8280/U9SSy9IVtjBuVeLr+HpOB4BQFWbg+UZaADMtTdGYI7Geitb76LTrr5QV/7Xg4ahLwYGYZzuHGZKM5ZAQ"}}}"#
+    );
 
-        let signed_json = ser::to_string(&json).unwrap();
+    assert_eq!(
+        sign_bytes_json(&sig_key, br#"{"one": 1, "two": "Two"}"#),
+        r#"{"one":1,"signatures":{"domain":{"ed25519:1":"KqmLSbO39/Bzb0QIYE82zqLwsA+PDzYIpIRA2sRQ4sL53+sN6/fpNSoqE7BP7vBZhG6kYdD13EIMJpvhJI+6Bw"}},"two":"Two"}"#
+    );
 
-        assert_eq!(
-            signed_json,
-            r#"{"signatures":{"domain":{"ed25519:1":"K8280/U9SSy9IVtjBuVeLr+HpOB4BQFWbg+UZaADMtTdGYI7Geitb76LTrr5QV/7Xg4ahLwYGYZzuHGZKM5ZAQ"}}}"#
-        );
-    }
-
-    {
-        let mut json = serde_json::from_slice::<value::Value>(
-            br#"{"one": 1, "two": "Two"}"#
-        ).unwrap();
-        sign_json(&sig_key, "domain".to_string(), json.as_object_mut().unwrap()).unwrap();
-
-        let signed_json = ser::to_string(&json).unwrap();
-
-        assert_eq!(
-            signed_json,
-            r#"{"one":1,"signatures":{"domain":{"ed25519:1":"KqmLSbO39/Bzb0QIYE82zqLwsA+PDzYIpIRA2sRQ4sL53+sN6/fpNSoqE7BP7vBZhG6kYdD13EIMJpvhJI+6Bw"}},"two":"Two"}"#
-        );
-    }
-
-    {
-        let mut json = serde_json::from_slice::<value::Value>(
+    assert_eq!(
+        sign_bytes_json(&sig_key,
             br#"{"one": 1, "two": "Two", "signatures": {}}"#
-        ).unwrap();
-        sign_json(&sig_key, "domain".to_string(), json.as_object_mut().unwrap()).unwrap();
+        ),
+        r#"{"one":1,"signatures":{"domain":{"ed25519:1":"KqmLSbO39/Bzb0QIYE82zqLwsA+PDzYIpIRA2sRQ4sL53+sN6/fpNSoqE7BP7vBZhG6kYdD13EIMJpvhJI+6Bw"}},"two":"Two"}"#
+    );
 
-        let signed_json = ser::to_string(&json).unwrap();
+    assert_eq!(
+        sign_bytes_json(&sig_key,
+            br#"{"one": 1, "two": "Two", "signatures": {"domain2": {}}}"#
+        ),
+        r#"{"one":1,"signatures":{"domain":{"ed25519:1":"KqmLSbO39/Bzb0QIYE82zqLwsA+PDzYIpIRA2sRQ4sL53+sN6/fpNSoqE7BP7vBZhG6kYdD13EIMJpvhJI+6Bw"},"domain2":{}},"two":"Two"}"#
+    );
 
-        assert_eq!(
-            signed_json,
-            r#"{"one":1,"signatures":{"domain":{"ed25519:1":"KqmLSbO39/Bzb0QIYE82zqLwsA+PDzYIpIRA2sRQ4sL53+sN6/fpNSoqE7BP7vBZhG6kYdD13EIMJpvhJI+6Bw"}},"two":"Two"}"#
-        );
-    }
+    assert_eq!(
+        sign_bytes_json(&sig_key,
+            br#"{"one": 1, "two": "Two", "signatures": {"domain": {"ed25519:2": "ABC"}}}"#
+        ),
+        r#"{"one":1,"signatures":{"domain":{"ed25519:1":"KqmLSbO39/Bzb0QIYE82zqLwsA+PDzYIpIRA2sRQ4sL53+sN6/fpNSoqE7BP7vBZhG6kYdD13EIMJpvhJI+6Bw","ed25519:2":"ABC"}},"two":"Two"}"#
+    );
+}
+
+#[cfg(test)]
+fn sign_bytes_json(sig_key: &SigningKey, s: &[u8]) -> String {
+    let mut json = serde_json::from_slice::<value::Value>(s).unwrap();
+    sign_json(&sig_key, "domain".to_string(), json.as_object_mut().unwrap()).unwrap();
+    ser::to_string(&json).unwrap()
 }
