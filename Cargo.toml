@@ -6,7 +6,6 @@ version = "0.1.0"
 [dependencies]
 chrono = "0.2.19"
 log = "0.3.5"
-openssl = "0.7.5"
 quick-error = "0.2.2"
 rustc-serialize = "0.3.16"
 serde = "0.6.11"

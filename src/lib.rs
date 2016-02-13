@@ -6,7 +6,6 @@ extern crate serde_json;
 extern crate sodiumoxide;
 extern crate rustc_serialize;
 extern crate chrono;
-extern crate openssl;
 extern crate serde;
 
 pub mod key;
