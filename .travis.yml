@@ -1,0 +1,15 @@
+language: rust
+rust:
+- nightly
+after_success: |
+  [ $TRAVIS_BRANCH = master ] &&
+  [ $TRAVIS_PULL_REQUEST = false ] &&
+  [ $TRAVIS_RUST_VERSION = nightly ] &&
+  cargo doc --no-deps &&
+  echo "<meta http-equiv=refresh content=0;url=matrix-federation/index.html>" > target/doc/index.html &&
+  pip install --user ghp-import &&
+  ghp-import -n target/doc &&
+  git push -fq https://${TOKEN}@github.com/${TRAVIS_REPO_SLUG}.git gh-pages
+env:
+  global:
+  - secure: MYf01i9Ok0FyeuNWflqSNSVEXyOtSPQ2F7eeiM1bVOarK6my28ATVb/a/X3+yU/csUrPj7Swry06mjiME1sagPE5y3zqIfOmaHzaOuz1YK2H/csE0vW/7ifmyfZOptqeSEXL11y0vq4Vlc3FaNyuZ47T+AihisFGAahkKCn7Sv65603AOtdMznM68pAJr7jd7BRAkHiTJRbqUrPC5UUEfKCa637ILDRjbTNgKwvEc5XbSqcc1d1Mkt0Te5LcuxTU0e5RmUioTswsWvKL4t4UgAlKPESv/0Em2hH0m9n2rL65y80lx6G2IkEvlSZ5VBYfaEDCVsG8KjH9Kq0AOZkoogooNg5He4eyXPqxG51kk/CMpHoHPUWxvK9UAgqDYZ4bM43yp7PjoZig7ZIIcAqM4gV8I2lUszN8zrWcXrlY02GMdXlGw61hyai6KhJgODKjEGZXjw8R9y6HSJasD/KJPjlJRHrO/+4hct79ILPQjL2HI8GjbBy34YQYssoIlYxwKockn6D+YQbsU20gb4fBN1nZI8p7OkOD7dYmiJ4N3sHKqZqBD5SNlzWPUtW5bYAtE0eDVVBo6feqdvppE7j9nSceh8FDd99KQD/QJVr0ZNL7oEg4LJlEFYFUxJBxew0soxQCsitD6D/yCX2ymHBxHncp4eLuitzBbfdssXFpSw0=
