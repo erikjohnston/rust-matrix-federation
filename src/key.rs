@@ -5,6 +5,9 @@ use signedjson;
 use serde_json::{value, builder};
 use chrono;
 use chrono::{Timelike, TimeZone};
+use std::collections::BTreeMap;
+
+// use rustc_serialize::base64::FromBase64;
 
 
 /// Generate a JSON object that satisfies a key request.
@@ -14,7 +17,7 @@ pub fn key_server_v2_response<TZ: chrono::TimeZone>(
         valid_until: &chrono::DateTime<TZ>,
         tls_fingerprint_type: String,
         tls_fingerprint_hash: String,
-) -> signedjson::Result<value::Value> {
+) -> Result<value::Value, signedjson::SigningJsonError> {
     let valid_until_ts = valid_until.timestamp() * 1000 + valid_until.time().nanosecond() as i64 / 1000000;
 
     let mut val = builder::ObjectBuilder::new()
@@ -38,6 +41,39 @@ pub fn key_server_v2_response<TZ: chrono::TimeZone>(
     ));
 
     Ok(val)
+}
+
+
+/// Verifies the a response from a key server.
+pub fn validate_key_server_v2_response(server_name: &str, response: &value::Value) {
+    let keys_json = response.find("verify_keys").unwrap().as_object().unwrap();
+    let mut keys = BTreeMap::new();
+    for (key_id, value) in keys_json {
+        let key_b64 = value.find("key").unwrap().as_string().unwrap();
+        keys.insert(
+            key_id,
+            signedjson::VerifyKey::from_b64(key_b64.as_bytes(), key_id.clone()).unwrap(),
+        );
+    }
+
+    let sigs = signedjson::get_signatures(response).unwrap();
+    let domain_sigs = sigs.get(server_name).unwrap();
+
+    let mut signed = false;
+    for (key_id, sig) in domain_sigs {
+        if let Some(key) = keys.get(key_id) {
+            if signedjson::verify_sigend_json(sig, key, response).unwrap() {
+                signed = true;
+                break;
+            } else {
+                panic!("Signature doesn't match");
+            }
+        }
+    }
+
+    if !signed {
+        panic!("Not signed!");
+    }
 }
 
 

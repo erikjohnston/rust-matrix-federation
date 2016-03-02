@@ -22,7 +22,7 @@ pub fn sign_request_b64(
     origin: String,
     destination: String,
     content: Option<&signedjson::Object>,
-) -> signedjson::Result<String> {
+) -> Result<String, signedjson::SigningJsonError> {
     let mut builder = builder::ObjectBuilder::new()
         .insert("method", method)
         .insert("uri", uri)
@@ -48,7 +48,7 @@ pub fn generate_auth_header(
     origin: String,
     destination: String,
     content: Option<&signedjson::Object>,
-) -> signedjson::Result<String> {
+) -> Result<String, signedjson::SigningJsonError> {
     let sig = try!(sign_request_b64(key, method, uri, origin.clone(), destination, content));
     Ok(format!(
         r#"X-Matrix origin={},key="{}",sig="{}""#,
