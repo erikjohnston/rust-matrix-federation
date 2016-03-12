@@ -1,12 +1,14 @@
+#![feature(custom_derive, plugin)]
+#![plugin(serde_macros)]
 
 #[macro_use] extern crate log;
 #[macro_use] extern crate quick_error;
 
+extern crate serde;
 extern crate serde_json;
 extern crate sodiumoxide;
 extern crate rustc_serialize;
 extern crate chrono;
-extern crate serde;
 
 pub mod key;
 pub mod signedjson;

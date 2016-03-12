@@ -2,12 +2,72 @@
 
 use signedjson;
 
+use serde;
+use serde::de::Error;
+use serde_json;
 use serde_json::{value, builder};
 use chrono;
 use chrono::{Timelike, TimeZone};
 use std::collections::BTreeMap;
+use sodiumoxide::crypto::sign;
+use rustc_serialize::base64::{FromBase64};
 
 // use rustc_serialize::base64::FromBase64;
+
+#[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct TlsFingerprint {
+    pub sha256: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialEq, Eq, PartialOrd, Ord)]
+struct VerifyKeySerialized {
+    pub key: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct KeyApiResponse {
+    pub server_name: String,
+    pub signatures: signedjson::Signatures,
+    pub tls_fingerprints: Vec<TlsFingerprint>,
+    pub valid_until_ts: u64,
+    pub verify_keys: VerifyKeys,
+    pub old_verify_keys: VerifyKeys,
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct VerifyKeys {
+    pub map: BTreeMap<String, signedjson::VerifyKey>,
+}
+
+impl serde::Serialize for VerifyKeys {
+    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
+        where S: serde::Serializer
+    {
+        serializer.serialize_map(serde::ser::impls::MapIteratorVisitor::new(
+            self.map.iter().map(|(key_id, key)| (key_id, VerifyKeySerialized { key: key.public_key_b64() })),
+            Some(self.map.len()),
+        ))
+    }
+}
+
+impl serde::Deserialize for VerifyKeys {
+    fn deserialize<D>(deserializer: &mut D) -> Result<VerifyKeys, D::Error>
+        where D: serde::Deserializer,
+    {
+        let visitor = serde::de::impls::BTreeMapVisitor::new();
+        let de_map : BTreeMap<String, VerifyKeySerialized> = try!(deserializer.deserialize(visitor));
+
+        let parsed_map = try!(de_map.into_iter().map(|(key_id, key_struct)| {
+            signedjson::VerifyKey::from_b64(key_struct.key.as_bytes(), key_id.clone())
+                .ok_or(D::Error::invalid_value("Invalid signature"))
+                .map(|verify_key| (key_id, verify_key) )
+        }).collect());
+
+        Ok(VerifyKeys {
+            map: parsed_map,
+        })
+    }
+}
 
 
 /// Generate a JSON object that satisfies a key request.
@@ -51,7 +111,7 @@ pub fn validate_key_server_v2_response(server_name: &str, response: &value::Valu
     for (key_id, value) in keys_json {
         let key_b64 = value.find("key").unwrap().as_string().unwrap();
         keys.insert(
-            key_id,
+            key_id.clone(),
             signedjson::VerifyKey::from_b64(key_b64.as_bytes(), key_id.clone()).unwrap(),
         );
     }
@@ -61,8 +121,36 @@ pub fn validate_key_server_v2_response(server_name: &str, response: &value::Valu
 
     let mut signed = false;
     for (key_id, sig) in domain_sigs {
-        if let Some(key) = keys.get(key_id) {
+        if let Some(key) = keys.get(*key_id) {
             if signedjson::verify_sigend_json(sig, key, response).unwrap() {
+                signed = true;
+                break;
+            } else {
+                panic!("Signature doesn't match");
+            }
+        }
+    }
+
+    if !signed {
+        panic!("Not signed!");
+    }
+}
+
+/// Verifies the a response from a key server.
+pub fn validate_key_server_v2_response2(server_name: &str, response: &[u8]) {
+    let response_value : serde_json::Value = serde_json::from_slice(response).unwrap();
+    let key_api_response : KeyApiResponse = serde_json::from_value(response_value.clone()).unwrap();
+
+    let keys = key_api_response.verify_keys.map;
+
+    let sigs = key_api_response.signatures;
+
+    let domain_sigs = sigs.map.get(server_name).unwrap();
+
+    let mut signed = false;
+    for (key_id, sig) in domain_sigs {
+        if let Some(key) = keys.get(&key_id[..]) {
+            if signedjson::verify_sigend_json(sig, key, &response_value).unwrap() {
                 signed = true;
                 break;
             } else {
@@ -84,6 +172,7 @@ mod tests {
     use ::signedjson;
     use chrono;
     use chrono::offset::TimeZone;
+    use std::collections::BTreeMap;
 
     #[test]
     fn test_key_server_response() {
@@ -104,5 +193,35 @@ mod tests {
         ).unwrap();
 
         assert_eq!(expected, serde_json::to_string(&resp).unwrap());
+    }
+
+    #[test]
+    fn test_ser_verify_keys() {
+        let expected = r#"{"ed25519:a_VVEI":{"key":"C7zW67apLhBsUFnDty8ILE380Wke56EqjgykGFKttFk"}}"#;
+
+        let key_id = "ed25519:a_VVEI".to_string();
+
+        let mut map = BTreeMap::new();
+        let key = signedjson::VerifyKey::from_b64(b"C7zW67apLhBsUFnDty8ILE380Wke56EqjgykGFKttFk", key_id.clone()).unwrap();
+        map.insert(key_id.clone(), key);
+
+        let keys = VerifyKeys { map: map };
+
+        let ser = serde_json::to_string(&keys).unwrap();
+        assert_eq!(expected, ser);
+    }
+
+    #[test]
+    fn test_der_verify_keys() {
+        let decode = r#"{"ed25519:a_VVEI":{"key":"C7zW67apLhBsUFnDty8ILE380Wke56EqjgykGFKttFk"}}"#;
+
+        let key = "C7zW67apLhBsUFnDty8ILE380Wke56EqjgykGFKttFk";
+        let key_id = "ed25519:a_VVEI".to_string();
+
+        let keys : VerifyKeys = serde_json::from_str(&decode).unwrap();
+
+        let expected_key = signedjson::VerifyKey::from_b64(key.as_bytes(), key_id.clone()).unwrap();
+
+        assert_eq!(expected_key, keys.map[&key_id]);
     }
 }
