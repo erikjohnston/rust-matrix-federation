@@ -104,15 +104,15 @@ impl VerifyKey {
     /// Create the verfiy key from Base64 encoded bytes.
     pub fn from_b64(b64: &[u8], key_id: String) -> Option<VerifyKey> {
         b64.from_base64().ok()
-        .and_then(|slice| {
-            sign::PublicKey::from_slice(&slice)
-        })
-        .map(|public_key| {
-            VerifyKey {
-                public: public_key,
-                key_id: key_id,
-            }
-        })
+            .and_then(|slice| {
+                sign::PublicKey::from_slice(&slice)
+            })
+            .map(|public_key| {
+                VerifyKey {
+                    public: public_key,
+                    key_id: key_id,
+                }
+            })
     }
 
     /// Return a unpadded base64 version of the public key.
@@ -216,6 +216,12 @@ impl Signatures {
 
     pub fn iter_mut(&mut self) -> std::collections::btree_map::IterMut<String, DomainSignatures> {
         self.map.iter_mut()
+    }
+
+    pub fn get_signature<Q1, Q2>(&self, domain: &Q1, key_id: &Q2) -> Option<&sign::Signature>
+        where String: std::borrow::Borrow<Q1> + std::borrow::Borrow<Q2>, Q1: Ord, Q2: Ord
+    {
+        self.map.get(domain).and_then(|sigs| sigs.map.get(key_id))
     }
 }
 

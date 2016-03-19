@@ -9,8 +9,6 @@ use serde_json::{value, builder};
 use chrono;
 use chrono::{Timelike, TimeZone};
 use std::collections::BTreeMap;
-use sodiumoxide::crypto::sign;
-use rustc_serialize::base64::{FromBase64};
 
 // use rustc_serialize::base64::FromBase64;
 
@@ -137,7 +135,7 @@ pub fn validate_key_server_v2_response(server_name: &str, response: &value::Valu
 }
 
 /// Verifies the a response from a key server.
-pub fn validate_key_server_v2_response2(server_name: &str, response: &[u8]) {
+pub fn validate_key_server_v2_response2(server_name: &str, response: &[u8]) -> bool {
     let response_value : serde_json::Value = serde_json::from_slice(response).unwrap();
     let key_api_response : KeyApiResponse = serde_json::from_value(response_value.clone()).unwrap();
 
@@ -159,9 +157,7 @@ pub fn validate_key_server_v2_response2(server_name: &str, response: &[u8]) {
         }
     }
 
-    if !signed {
-        panic!("Not signed!");
-    }
+    return signed;
 }
 
 
