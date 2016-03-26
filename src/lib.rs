@@ -3,6 +3,7 @@
 
 #[macro_use] extern crate log;
 #[macro_use] extern crate quick_error;
+#[cfg(test)] extern crate env_logger;
 
 extern crate serde;
 extern crate serde_json;

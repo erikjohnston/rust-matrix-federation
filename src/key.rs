@@ -6,11 +6,28 @@ use serde;
 use serde::de::Error;
 use serde_json;
 use serde_json::{value, builder};
+use serde_json::error::Error as SerdeJsonError;
 use chrono;
 use chrono::{Timelike, TimeZone};
 use std::collections::BTreeMap;
 
-// use rustc_serialize::base64::FromBase64;
+
+quick_error! {
+    #[derive(Debug)]
+    pub enum ValidationError {
+        Serialization(err: SerdeJsonError) {
+            from()
+            description(err.description())
+            display("SerdeJsonError: {}", err)
+        }
+        VerifyJsonError(err: signedjson::VerifyJsonError) {
+            from()
+            description(err.description())
+            display("VerifyJsonError: {}", err)
+        }
+    }
+}
+
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TlsFingerprint {
@@ -101,63 +118,37 @@ pub fn key_server_v2_response<TZ: chrono::TimeZone>(
     Ok(val)
 }
 
-
 /// Verifies the a response from a key server.
-pub fn validate_key_server_v2_response(server_name: &str, response: &value::Value) {
-    let keys_json = response.find("verify_keys").unwrap().as_object().unwrap();
-    let mut keys = BTreeMap::new();
-    for (key_id, value) in keys_json {
-        let key_b64 = value.find("key").unwrap().as_string().unwrap();
-        keys.insert(
-            key_id.clone(),
-            signedjson::VerifyKey::from_b64(key_b64.as_bytes(), key_id.clone()).unwrap(),
-        );
-    }
-
-    let sigs = signedjson::get_signatures(response).unwrap();
-    let domain_sigs = sigs.get(server_name).unwrap();
-
-    let mut signed = false;
-    for (key_id, sig) in domain_sigs {
-        if let Some(key) = keys.get(*key_id) {
-            if signedjson::verify_sigend_json(sig, key, response).unwrap() {
-                signed = true;
-                break;
-            } else {
-                panic!("Signature doesn't match");
-            }
-        }
-    }
-
-    if !signed {
-        panic!("Not signed!");
-    }
-}
-
-/// Verifies the a response from a key server.
-pub fn validate_key_server_v2_response2(server_name: &str, response: &[u8]) -> bool {
-    let response_value : serde_json::Value = serde_json::from_slice(response).unwrap();
-    let key_api_response : KeyApiResponse = serde_json::from_value(response_value.clone()).unwrap();
+pub fn validate_key_server_v2_response(server_name: &str, response: &[u8])
+    -> Result<bool, ValidationError>
+{
+    let response_value : serde_json::Value = try!(serde_json::from_slice(response));
+    let key_api_response : KeyApiResponse = try!(serde_json::from_value(response_value.clone()));
 
     let keys = key_api_response.verify_keys.map;
-
     let sigs = key_api_response.signatures;
 
-    let domain_sigs = sigs.map.get(server_name).unwrap();
+    let domain_sigs = if let Some(m) = sigs.map.get(server_name) {
+        m
+    } else {
+        debug!("Key response from '{}' had no signatures.", server_name);
+        return Ok(false);
+    };
 
     let mut signed = false;
     for (key_id, sig) in domain_sigs {
+        // TODO: Should we do something different if the sigs don't match?
         if let Some(key) = keys.get(&key_id[..]) {
-            if signedjson::verify_sigend_json(sig, key, &response_value).unwrap() {
+            if try!(signedjson::verify_sigend_json(sig, key, &response_value)) {
                 signed = true;
                 break;
             } else {
-                panic!("Signature doesn't match");
+                debug!("Key response from '{}' had incorrect signature for key '{}'", server_name, key_id);
             }
         }
     }
 
-    return signed;
+    Ok(signed)
 }
 
 
@@ -219,5 +210,13 @@ mod tests {
         let expected_key = signedjson::VerifyKey::from_b64(key.as_bytes(), key_id.clone()).unwrap();
 
         assert_eq!(expected_key, keys.map[&key_id]);
+    }
+
+    #[test]
+    fn test_validation() {
+        let expected = br#"{"old_verify_keys":{},"server_name":"localhost:8480","signatures":{"localhost:8480":{"ed25519:a_VVEI":"Rxux9EmIhQbzoyEsKTSxEblrgzIWJf9+Lt2Mosck/oVr8wMD4o43aPlUR7KLY9th5/pkA8KSDHgWykuP66jwDw"}},"tls_fingerprints":[{"sha256":"UifzuekNGuXx1QA1tW8j6GCN5VEgI0bRahv3kDWAdDQ"}],"valid_until_ts":1454868565824,"verify_keys":{"ed25519:a_VVEI":{"key":"C7zW67apLhBsUFnDty8ILE380Wke56EqjgykGFKttFk"}}}"#;
+        let server_name = "localhost:8480";
+
+        assert!(validate_key_server_v2_response(server_name, expected).unwrap());
     }
 }

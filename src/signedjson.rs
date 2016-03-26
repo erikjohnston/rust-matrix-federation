@@ -204,7 +204,7 @@ impl serde::Deserialize for DomainSignatures {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Signatures {
     pub map: BTreeMap<String, DomainSignatures>,
 }
@@ -256,6 +256,30 @@ impl <'a, Q> std::ops::Index<&'a Q> for Signatures where Q: Ord + Sized, String:
     type Output = DomainSignatures;
     fn index(&self, key: &Q) -> &DomainSignatures {
         self.map.index(key)
+    }
+}
+
+impl serde::Serialize for Signatures {
+    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
+        where S: serde::Serializer
+    {
+        serializer.serialize_map(serde::ser::impls::MapIteratorVisitor::new(
+            self.map.iter(),
+            Some(self.map.len()),
+        ))
+    }
+}
+
+impl serde::Deserialize for Signatures {
+    fn deserialize<D>(deserializer: &mut D) -> Result<Signatures, D::Error>
+        where D: serde::Deserializer,
+    {
+        let visitor = serde::de::impls::BTreeMapVisitor::new();
+        let parsed_map : BTreeMap<String, DomainSignatures> = try!(deserializer.deserialize(visitor));
+
+        Ok(Signatures {
+            map: parsed_map,
+        })
     }
 }
 
@@ -328,7 +352,7 @@ pub fn verify_sigend_json(sig: &sign::Signature, key: &VerifyKey, json: &value::
     );
 
     let serialized = if json_object.contains_key("signatures") {
-        let mut j = json.as_object().unwrap().clone();
+        let mut j = json_object.clone();
         j.remove("signatures");
         try!(ser::to_string(&j))
     } else {
