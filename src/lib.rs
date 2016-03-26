@@ -13,6 +13,7 @@ extern crate chrono;
 
 pub mod key;
 pub mod signedjson;
+pub mod ser;
 
 use serde_json::builder;
 

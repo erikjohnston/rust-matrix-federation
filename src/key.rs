@@ -41,17 +41,87 @@ struct VerifyKeySerialized {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct KeyApiResponse {
-    pub server_name: String,
-    pub signatures: signedjson::Signatures,
-    pub tls_fingerprints: Vec<TlsFingerprint>,
-    pub valid_until_ts: u64,
-    pub verify_keys: VerifyKeys,
-    pub old_verify_keys: VerifyKeys,
+    server_name: String,
+    signatures: signedjson::Signatures,
+    tls_fingerprints: Vec<TlsFingerprint>,
+    valid_until_ts: u64,
+    verify_keys: VerifyKeys,
+    old_verify_keys: VerifyKeys,
+}
+
+impl KeyApiResponse {
+    pub fn create(
+        key: &signedjson::SigningKey,
+        server_name: &str,
+        tls_fingerprint_sha256: String,
+    ) -> KeyApiResponse {
+        let now = chrono::UTC::now() + chrono::Duration::days(1);
+        let valid_until_ts = now.timestamp() * 1000 + now.time().nanosecond() as i64 / 1000000;
+
+        let mut key_api_response = KeyApiResponse {
+            server_name: server_name.to_string(),
+            valid_until_ts: valid_until_ts as u64,
+            verify_keys: VerifyKeys::from_key(
+                signedjson::VerifyKey::from_signing_key(&key)
+            ),
+            tls_fingerprints: vec![TlsFingerprint { sha256: tls_fingerprint_sha256 }],
+            old_verify_keys: VerifyKeys::new(),
+            signatures: signedjson::Signatures::new(),
+        };
+
+        signedjson::sign_struct(server_name.to_string(), &key, &mut key_api_response).unwrap();
+
+        key_api_response
+    }
+
+    pub fn server_name(&self) -> &String {
+        &self.server_name
+    }
+
+    pub fn tls_fingerprints(&self) -> &Vec<TlsFingerprint> {
+        &self.tls_fingerprints
+    }
+
+    pub fn valid_until_ts(&self) -> u64 {
+        self.valid_until_ts
+    }
+
+    pub fn verify_keys(&self) -> &VerifyKeys {
+        &self.verify_keys
+    }
+
+    pub fn old_verify_keys(&self) -> &VerifyKeys {
+        &self.old_verify_keys
+    }
+}
+
+impl signedjson::SignedStruct for KeyApiResponse {
+    fn signatures(&self) -> &signedjson::Signatures {
+        &self.signatures
+    }
+
+    fn signatures_mut(&mut self) -> &mut signedjson::Signatures {
+        &mut self.signatures
+    }
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct VerifyKeys {
     pub map: BTreeMap<String, signedjson::VerifyKey>,
+}
+
+impl VerifyKeys {
+    pub fn new() -> VerifyKeys {
+        VerifyKeys {
+            map: BTreeMap::new(),
+        }
+    }
+
+    pub fn from_key(key: signedjson::VerifyKey) -> VerifyKeys {
+        let mut map = BTreeMap::new();
+        map.insert(key.key_id.clone(), key);
+        VerifyKeys { map: map }
+    }
 }
 
 impl serde::Serialize for VerifyKeys {

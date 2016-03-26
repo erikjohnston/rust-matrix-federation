@@ -115,6 +115,13 @@ impl VerifyKey {
             })
     }
 
+    pub fn from_signing_key(signing_key: &SigningKey) -> VerifyKey {
+        VerifyKey {
+            public: signing_key.public.clone(),
+            key_id: signing_key.key_id.clone(),
+        }
+    }
+
     /// Return a unpadded base64 version of the public key.
     pub fn public_key_b64(&self) -> String {
         self.public.0.to_base64(UNPADDED_BASE64)
@@ -127,6 +134,12 @@ pub struct DomainSignatures {
 }
 
 impl DomainSignatures {
+    pub fn new() -> DomainSignatures {
+        DomainSignatures {
+            map: BTreeMap::new(),
+        }
+    }
+
     pub fn iter(&self) -> std::collections::btree_map::Iter<String, sign::Signature> {
         self.map.iter()
     }
@@ -210,6 +223,12 @@ pub struct Signatures {
 }
 
 impl Signatures {
+    pub fn new() -> Signatures {
+        Signatures {
+            map: BTreeMap::new(),
+        }
+    }
+
     pub fn iter(&self) -> std::collections::btree_map::Iter<String, DomainSignatures> {
         self.map.iter()
     }
@@ -222,6 +241,10 @@ impl Signatures {
         where String: std::borrow::Borrow<Q1> + std::borrow::Borrow<Q2>, Q1: Ord, Q2: Ord
     {
         self.map.get(domain).and_then(|sigs| sigs.map.get(key_id))
+    }
+
+    pub fn add_signature(&mut self, domain: String, key_id: String, signature: sign::Signature) {
+        self.map.entry(domain).or_insert(DomainSignatures::new()).map.insert(key_id, signature);
     }
 }
 
@@ -283,6 +306,10 @@ impl serde::Deserialize for Signatures {
     }
 }
 
+pub trait SignedStruct {
+    fn signatures(&self) -> &Signatures;
+    fn signatures_mut(&mut self) -> &mut Signatures;
+}
 
 
 /// Takes a JSON object, signs it, and adds the signature to the object.
@@ -293,6 +320,18 @@ pub fn sign_json(key: &SigningKey, entity_name: String, json: &mut Object) -> Re
     let mut sig_obj = get_or_insert(json, "signatures".to_string());
     let mut sig_place = get_or_insert(sig_obj, entity_name);
     sig_place.insert(key.key_id.clone(), value::Value::String(b64sig));
+    Ok(())
+}
+
+pub fn sign_struct<T>(server_name: String, key: &SigningKey, obj: &mut T)
+    -> Result<(), SigningJsonError> where T: serde::Serialize + SignedStruct
+{
+    let sig = try!(get_sig_for_json(&key, &obj));
+
+    obj.signatures_mut().add_signature(
+        server_name.to_string(), key.key_id.clone(), sig
+    );
+
     Ok(())
 }
 
