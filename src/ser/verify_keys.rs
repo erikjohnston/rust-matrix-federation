@@ -58,13 +58,13 @@ impl serde::Deserialize for VerifyKeys {
         where D: serde::Deserializer,
     {
         let visitor = BTreeMapVisitor::new();
-        let de_map : BTreeMap<String, VerifyKeySerialized> = try!(deserializer.deserialize(visitor));
+        let de_map : BTreeMap<String, VerifyKeySerialized> = deserializer.deserialize(visitor)?;
 
-        let parsed_map = try!(de_map.into_iter().map(|(key_id, key_struct)| {
+        let parsed_map = de_map.into_iter().map(|(key_id, key_struct)| {
             signedjson::VerifyKey::from_b64(key_struct.key.as_bytes(), key_id.clone())
                 .ok_or(D::Error::invalid_value("Invalid signature"))
                 .map(|verify_key| (key_id, verify_key) )
-        }).collect());
+        }).collect()?;
 
         Ok(VerifyKeys {
             map: parsed_map,

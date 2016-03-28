@@ -1,4 +1,4 @@
-#![feature(custom_derive, plugin)]
+#![feature(custom_derive, plugin, question_mark)]
 #![plugin(serde_macros)]
 
 #[macro_use] extern crate log;
@@ -86,7 +86,7 @@ pub fn generate_auth_header<T: serde::Serialize>(
     destination: &str,
     content: Option<&T>,
 ) -> Result<String, signedjson::SigningJsonError> {
-    let sig = try!(sign_request_with_content(key, method, uri, origin, destination, content));
+    let sig = sign_request_with_content(key, method, uri, origin, destination, content)?;
     Ok(format!(
         r#"X-Matrix origin={},key="{}",sig="{}""#,
         &origin, key.key_id, sig.0.to_base64(UNPADDED_BASE64),

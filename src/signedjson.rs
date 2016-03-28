@@ -139,7 +139,7 @@ pub trait SignedStruct {
 
 /// Takes a JSON object, signs it, and adds the signature to the object.
 pub fn sign_json(key: &SigningKey, entity_name: String, json: &mut Object) -> Result<(), SigningJsonError> {
-    let b64sig = try!(get_sig_for_json_b64(key, json));
+    let b64sig = get_sig_for_json_b64(key, json)?;
 
     // json.entry("Signature".to_string()).or_insert();
     let mut sig_obj = get_or_insert(json, "signatures".to_string());
@@ -151,7 +151,7 @@ pub fn sign_json(key: &SigningKey, entity_name: String, json: &mut Object) -> Re
 pub fn sign_struct<T>(server_name: String, key: &SigningKey, obj: &mut T)
     -> Result<(), SigningJsonError> where T: serde::Serialize + SignedStruct
 {
-    let sig = try!(get_sig_for_json(&key, &obj));
+    let sig = get_sig_for_json(&key, &obj)?;
 
     obj.signatures_mut().add_signature(
         server_name.to_string(), key.key_id.clone(), sig
@@ -163,19 +163,19 @@ pub fn sign_struct<T>(server_name: String, key: &SigningKey, obj: &mut T)
 pub fn parse_json_slice<S>(bytes: &[u8]) -> Result<(S, Vec<u8>), serde_json::Error>
     where S: serde::Deserialize
 {
-    let value : serde_json::Value = try!(serde_json::from_slice(bytes));
+    let value : serde_json::Value = serde_json::from_slice(bytes)?;
 
     let signed_bytes = if let Some(obj) = value.as_object() {
         let mut new_obj = obj.clone();
         new_obj.remove("signatures");
         new_obj.remove("unsigned");
 
-        try!(serde_json::to_vec(&new_obj))
+        serde_json::to_vec(&new_obj)?
     } else {
         bytes.to_owned()
     };
 
-    let res : S = try!(serde_json::from_value(value));
+    let res : S = serde_json::from_value(value)?;
 
     Ok((res, signed_bytes))
 }
@@ -234,7 +234,7 @@ pub fn get_sig_for_json<S: serde::Serialize>(key: &SigningKey, object: &S)
         obj.remove("unsigned");
     }
 
-    let serialized = try!(ser::to_string(&value));
+    let serialized = ser::to_string(&value)?;
 
     let signature = sign::sign_detached(serialized.as_bytes(), &key.secret);
     Ok(signature)
@@ -242,13 +242,10 @@ pub fn get_sig_for_json<S: serde::Serialize>(key: &SigningKey, object: &S)
 
 
 pub fn get_signatures(json: &value::Value) -> Result<BTreeMap<&str, BTreeMap<&str, sign::Signature>>, VerifyJsonError> {
-    let sig_objs : &BTreeMap<String, value::Value> = try!(
-        json.find("signatures")
-        .ok_or(VerifyJsonError::Unsigned)
-        .and_then(|s|
-            s.as_object().ok_or(VerifyJsonError::MalformedJsonObject)
-        )
-    );
+    let sig_objs : &BTreeMap<String, value::Value> = json.find("signatures")
+        .ok_or(VerifyJsonError::Unsigned)?
+        .as_object()
+        .ok_or(VerifyJsonError::MalformedJsonObject)?;
 
     sig_objs.iter().map(|(domain, val)| {
         val.as_object().ok_or(VerifyJsonError::MalformedJsonObject)
@@ -270,16 +267,14 @@ pub fn get_signatures(json: &value::Value) -> Result<BTreeMap<&str, BTreeMap<&st
 pub fn verify_sigend_json(sig: &sign::Signature, key: &VerifyKey, json: &value::Value)
     -> Result<bool, VerifyJsonError>
 {
-    let json_object = try!(
-        json.as_object().ok_or(VerifyJsonError::NotJsonObject)
-    );
+    let json_object = json.as_object().ok_or(VerifyJsonError::NotJsonObject)?;
 
     let serialized = if json_object.contains_key("signatures") {
         let mut j = json_object.clone();
         j.remove("signatures");
-        try!(ser::to_string(&j))
+        ser::to_string(&j)?
     } else {
-        try!(ser::to_string(&json))
+        ser::to_string(&json)?
     };
 
     Ok(sign::verify_detached(&sig, &serialized.as_bytes(), &key))
@@ -288,7 +283,7 @@ pub fn verify_sigend_json(sig: &sign::Signature, key: &VerifyKey, json: &value::
 pub fn verify_sigend_json_slice(sig: &sign::Signature, key: &VerifyKey, json: &[u8])
     -> Result<bool, VerifyJsonError>
 {
-    let parsed_json : serde_json::Value = try!(serde_json::from_slice(json));
+    let parsed_json : serde_json::Value = serde_json::from_slice(json)?;
     verify_sigend_json(sig, key, &parsed_json)
 }
 

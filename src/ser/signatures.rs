@@ -94,14 +94,14 @@ impl serde::Deserialize for DomainSignatures {
         where D: serde::Deserializer,
     {
         let visitor = serde::de::impls::BTreeMapVisitor::new();
-        let de_map : BTreeMap<String, String> = try!(deserializer.deserialize(visitor));
+        let de_map : BTreeMap<String, String> = deserializer.deserialize(visitor)?;
 
-        let parsed_map = try!(de_map.into_iter().map(|(key_id, sig_b64)| {
+        let parsed_map = de_map.into_iter().map(|(key_id, sig_b64)| {
             sig_b64.from_base64().ok()
                 .and_then(|slice| sign::Signature::from_slice(&slice))
                 .map(|sig| (key_id, sig))
                 .ok_or(D::Error::invalid_value("Invalid signature"))
-        }).collect());
+        }).collect()?;
 
         Ok(DomainSignatures {
             map: parsed_map,
@@ -196,7 +196,7 @@ impl serde::Deserialize for Signatures {
         where D: serde::Deserializer,
     {
         let visitor = serde::de::impls::BTreeMapVisitor::new();
-        let parsed_map : BTreeMap<String, DomainSignatures> = try!(deserializer.deserialize(visitor));
+        let parsed_map : BTreeMap<String, DomainSignatures> = deserializer.deserialize(visitor)?;
 
         Ok(Signatures {
             map: parsed_map,

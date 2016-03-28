@@ -40,7 +40,7 @@ impl serde::Deserialize for TypedHash {
         where D: serde::Deserializer,
     {
         let visitor = serde::de::impls::BTreeMapVisitor::new();
-        let de_map : BTreeMap<String, String> = try!(deserializer.deserialize(visitor));
+        let de_map : BTreeMap<String, String> = deserializer.deserialize(visitor)?;
 
         if de_map.len() != 1 {
             return Err(D::Error::invalid_length(de_map.len()));

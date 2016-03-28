@@ -127,9 +127,7 @@ pub fn key_server_v2_response<TZ: chrono::TimeZone>(
         .insert_object("old_verify_keys", |builder| builder)
         .unwrap();
 
-    try!(signedjson::sign_json(
-        key, server_name.clone(), val.as_object_mut().unwrap()
-    ));
+    signedjson::sign_json(key, server_name.clone(), val.as_object_mut().unwrap())?;
 
     Ok(val)
 }
@@ -138,8 +136,8 @@ pub fn key_server_v2_response<TZ: chrono::TimeZone>(
 pub fn validate_key_server_v2_response(server_name: &str, response: &[u8])
     -> Result<bool, ValidationError>
 {
-    let response_value : serde_json::Value = try!(serde_json::from_slice(response));
-    let key_api_response : KeyApiResponse = try!(serde_json::from_value(response_value.clone()));
+    let response_value : serde_json::Value = serde_json::from_slice(response)?;
+    let key_api_response : KeyApiResponse = serde_json::from_value(response_value.clone())?;
 
     let keys = key_api_response.verify_keys;
     let sigs = key_api_response.signatures;
@@ -155,7 +153,7 @@ pub fn validate_key_server_v2_response(server_name: &str, response: &[u8])
     for (key_id, sig) in domain_sigs {
         // TODO: Should we do something different if the sigs don't match?
         if let Some(key) = keys.get(&key_id[..]) {
-            if try!(signedjson::verify_sigend_json(sig, key, &response_value)) {
+            if signedjson::verify_sigend_json(sig, key, &response_value)? {
                 signed = true;
                 break;
             } else {
