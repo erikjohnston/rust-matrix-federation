@@ -2,14 +2,15 @@
 
 use signedjson;
 
-use serde;
+use ::ser::verify_keys::VerifyKeys;
+use ::ser::signatures::Signatures;
+
 use serde::de::Error;
 use serde_json;
 use serde_json::{value, builder};
 use serde_json::error::Error as SerdeJsonError;
 use chrono;
 use chrono::{Timelike, TimeZone};
-use std::collections::BTreeMap;
 
 
 quick_error! {
@@ -35,14 +36,9 @@ pub struct TlsFingerprint {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialEq, Eq, PartialOrd, Ord)]
-struct VerifyKeySerialized {
-    pub key: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct KeyApiResponse {
     server_name: String,
-    signatures: signedjson::Signatures,
+    signatures: Signatures,
     tls_fingerprints: Vec<TlsFingerprint>,
     valid_until_ts: u64,
     verify_keys: VerifyKeys,
@@ -66,7 +62,7 @@ impl KeyApiResponse {
             ),
             tls_fingerprints: vec![TlsFingerprint { sha256: tls_fingerprint_sha256 }],
             old_verify_keys: VerifyKeys::new(),
-            signatures: signedjson::Signatures::new(),
+            signatures: Signatures::new(),
         };
 
         signedjson::sign_struct(server_name.to_string(), &key, &mut key_api_response).unwrap();
@@ -96,64 +92,14 @@ impl KeyApiResponse {
 }
 
 impl signedjson::SignedStruct for KeyApiResponse {
-    fn signatures(&self) -> &signedjson::Signatures {
+    fn signatures(&self) -> &Signatures {
         &self.signatures
     }
 
-    fn signatures_mut(&mut self) -> &mut signedjson::Signatures {
+    fn signatures_mut(&mut self) -> &mut Signatures {
         &mut self.signatures
     }
 }
-
-#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct VerifyKeys {
-    pub map: BTreeMap<String, signedjson::VerifyKey>,
-}
-
-impl VerifyKeys {
-    pub fn new() -> VerifyKeys {
-        VerifyKeys {
-            map: BTreeMap::new(),
-        }
-    }
-
-    pub fn from_key(key: signedjson::VerifyKey) -> VerifyKeys {
-        let mut map = BTreeMap::new();
-        map.insert(key.key_id.clone(), key);
-        VerifyKeys { map: map }
-    }
-}
-
-impl serde::Serialize for VerifyKeys {
-    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
-        where S: serde::Serializer
-    {
-        serializer.serialize_map(serde::ser::impls::MapIteratorVisitor::new(
-            self.map.iter().map(|(key_id, key)| (key_id, VerifyKeySerialized { key: key.public_key_b64() })),
-            Some(self.map.len()),
-        ))
-    }
-}
-
-impl serde::Deserialize for VerifyKeys {
-    fn deserialize<D>(deserializer: &mut D) -> Result<VerifyKeys, D::Error>
-        where D: serde::Deserializer,
-    {
-        let visitor = serde::de::impls::BTreeMapVisitor::new();
-        let de_map : BTreeMap<String, VerifyKeySerialized> = try!(deserializer.deserialize(visitor));
-
-        let parsed_map = try!(de_map.into_iter().map(|(key_id, key_struct)| {
-            signedjson::VerifyKey::from_b64(key_struct.key.as_bytes(), key_id.clone())
-                .ok_or(D::Error::invalid_value("Invalid signature"))
-                .map(|verify_key| (key_id, verify_key) )
-        }).collect());
-
-        Ok(VerifyKeys {
-            map: parsed_map,
-        })
-    }
-}
-
 
 /// Generate a JSON object that satisfies a key request.
 pub fn key_server_v2_response<TZ: chrono::TimeZone>(
@@ -195,10 +141,10 @@ pub fn validate_key_server_v2_response(server_name: &str, response: &[u8])
     let response_value : serde_json::Value = try!(serde_json::from_slice(response));
     let key_api_response : KeyApiResponse = try!(serde_json::from_value(response_value.clone()));
 
-    let keys = key_api_response.verify_keys.map;
+    let keys = key_api_response.verify_keys;
     let sigs = key_api_response.signatures;
 
-    let domain_sigs = if let Some(m) = sigs.map.get(server_name) {
+    let domain_sigs = if let Some(m) = sigs.get(server_name) {
         m
     } else {
         debug!("Key response from '{}' had no signatures.", server_name);
@@ -229,7 +175,6 @@ mod tests {
     use ::signedjson;
     use chrono;
     use chrono::offset::TimeZone;
-    use std::collections::BTreeMap;
 
     #[test]
     fn test_key_server_response() {
@@ -250,36 +195,6 @@ mod tests {
         ).unwrap();
 
         assert_eq!(expected, serde_json::to_string(&resp).unwrap());
-    }
-
-    #[test]
-    fn test_ser_verify_keys() {
-        let expected = r#"{"ed25519:a_VVEI":{"key":"C7zW67apLhBsUFnDty8ILE380Wke56EqjgykGFKttFk"}}"#;
-
-        let key_id = "ed25519:a_VVEI".to_string();
-
-        let mut map = BTreeMap::new();
-        let key = signedjson::VerifyKey::from_b64(b"C7zW67apLhBsUFnDty8ILE380Wke56EqjgykGFKttFk", key_id.clone()).unwrap();
-        map.insert(key_id.clone(), key);
-
-        let keys = VerifyKeys { map: map };
-
-        let ser = serde_json::to_string(&keys).unwrap();
-        assert_eq!(expected, ser);
-    }
-
-    #[test]
-    fn test_der_verify_keys() {
-        let decode = r#"{"ed25519:a_VVEI":{"key":"C7zW67apLhBsUFnDty8ILE380Wke56EqjgykGFKttFk"}}"#;
-
-        let key = "C7zW67apLhBsUFnDty8ILE380Wke56EqjgykGFKttFk";
-        let key_id = "ed25519:a_VVEI".to_string();
-
-        let keys : VerifyKeys = serde_json::from_str(&decode).unwrap();
-
-        let expected_key = signedjson::VerifyKey::from_b64(key.as_bytes(), key_id.clone()).unwrap();
-
-        assert_eq!(expected_key, keys.map[&key_id]);
     }
 
     #[test]
