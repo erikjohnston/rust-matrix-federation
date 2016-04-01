@@ -14,6 +14,7 @@ extern crate chrono;
 pub mod key;
 pub mod signedjson;
 pub mod ser;
+pub mod sigs;
 
 use rustc_serialize::base64;
 use rustc_serialize::base64::ToBase64;

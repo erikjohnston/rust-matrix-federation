@@ -136,7 +136,6 @@ pub trait SignedStruct {
     fn signatures_mut(&mut self) -> &mut Signatures;
 }
 
-
 /// Takes a JSON object, signs it, and adds the signature to the object.
 pub fn sign_json(key: &SigningKey, entity_name: String, json: &mut Object) -> Result<(), SigningJsonError> {
     let b64sig = get_sig_for_json_b64(key, json)?;
@@ -241,29 +240,6 @@ pub fn get_sig_for_json<S: serde::Serialize>(key: &SigningKey, object: &S)
 }
 
 
-pub fn get_signatures(json: &value::Value) -> Result<BTreeMap<&str, BTreeMap<&str, sign::Signature>>, VerifyJsonError> {
-    let sig_objs : &BTreeMap<String, value::Value> = json.find("signatures")
-        .ok_or(VerifyJsonError::Unsigned)?
-        .as_object()
-        .ok_or(VerifyJsonError::MalformedJsonObject)?;
-
-    sig_objs.iter().map(|(domain, val)| {
-        val.as_object().ok_or(VerifyJsonError::MalformedJsonObject)
-        .and_then(|obj|
-            obj.iter().map(|(key_id, val)| {  // key_id -> Signature
-                val.as_string()
-                .and_then(|v| v.from_base64().ok())
-                .and_then(|v| sign::Signature::from_slice(&v))
-                .map(|v| (&key_id[..], v))
-                .ok_or_else(|| VerifyJsonError::MalformedSignature(key_id.to_string()))
-            })
-            .collect()  // Converts Iter<Result> -> Result<Collection>
-        ).map(|sigs| (&domain[..], sigs))
-    })
-    .collect()
-}
-
-
 pub fn verify_sigend_json(sig: &sign::Signature, key: &VerifyKey, json: &value::Value)
     -> Result<bool, VerifyJsonError>
 {
@@ -280,18 +256,11 @@ pub fn verify_sigend_json(sig: &sign::Signature, key: &VerifyKey, json: &value::
     Ok(sign::verify_detached(&sig, &serialized.as_bytes(), &key))
 }
 
-pub fn verify_sigend_json_slice(sig: &sign::Signature, key: &VerifyKey, json: &[u8])
-    -> Result<bool, VerifyJsonError>
-{
-    let parsed_json : serde_json::Value = serde_json::from_slice(json)?;
-    verify_sigend_json(sig, key, &parsed_json)
-}
-
 
 fn get_or_insert<'a>(json: &'a mut Object, s: String) -> &'a mut Object {
     let mut val = json.entry(s).or_insert(value::Value::Object(Object::new()));
 
-    if let &mut value::Value::Object(ref mut obj) = val {
+    if let value::Value::Object(ref mut obj) = *val {
         obj
     } else {
         *val = value::Value::Object(Object::new());
