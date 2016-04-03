@@ -69,7 +69,7 @@ impl KeyApiResponse {
             signatures: Signatures::new(),
         };
 
-        signedjson::sign_struct(server_name.to_string(), &key, &mut key_api_response).unwrap();
+        signedjson::sign_struct(server_name.to_string(), &key, &mut key_api_response);
 
         key_api_response
     }

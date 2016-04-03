@@ -143,15 +143,13 @@ pub fn sign_json(key: &SigningKey, entity_name: String, json: &mut Object) -> Re
 }
 
 pub fn sign_struct<T>(server_name: String, key: &SigningKey, obj: &mut T)
-    -> Result<(), SigningJsonError> where T: ToCanonical + SignedMut
+    where T: ToCanonical + SignedMut
 {
     let sig = sign::sign_detached(&obj.to_canonical(), &key.secret);
 
     obj.signatures_mut().add_signature(
         server_name.to_string(), key.key_id.clone(), sig
     );
-
-    Ok(())
 }
 
 pub fn parse_json_slice<S>(bytes: &[u8]) -> Result<(S, Vec<u8>), serde_json::Error>
@@ -211,6 +209,34 @@ pub fn verify_slice<S, K>(entity: &str, bytes: &[u8], signed: &S, key_store: &K)
         return VerifyResult::NoSignatures;
     }
 }
+
+
+pub fn verify_struct<T, K>(entity: &str, obj: &mut T, key_store: &K)
+    -> VerifyResult where T: ToCanonical + Signed, K: KeyStore
+{
+    let bytes = obj.to_canonical();
+
+    if let Some(domain_sigs) = obj.signatures().get(entity) {
+        for (key_id, sig) in domain_sigs {
+            if let Some(key) = key_store.get(entity, key_id) {
+                if sign::verify_detached(&sig, &bytes, &key) {
+                    return VerifyResult::Signed;
+                } else {
+                    return VerifyResult::IncorrectSignature;
+                }
+            }
+        }
+
+        if domain_sigs.len() > 0 {
+            return VerifyResult::NoKnownKeys;
+        } else {
+            return VerifyResult::NoSignatures;
+        }
+    } else {
+        return VerifyResult::NoSignatures;
+    }
+}
+
 
 
 /// Returns the base64 encoded signature for a JSON object
