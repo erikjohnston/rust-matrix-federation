@@ -13,7 +13,7 @@ use sodiumoxide::crypto::sign;
 
 use rustc_serialize::base64::{FromBase64, ToBase64};
 
-use ::sigs::{Signed, SignedMut};
+use ::sigs::{Signed, SignedMut, ToCanonical};
 use ::UNPADDED_BASE64;
 
 
@@ -143,9 +143,9 @@ pub fn sign_json(key: &SigningKey, entity_name: String, json: &mut Object) -> Re
 }
 
 pub fn sign_struct<T>(server_name: String, key: &SigningKey, obj: &mut T)
-    -> Result<(), SigningJsonError> where T: serde::Serialize + SignedMut
+    -> Result<(), SigningJsonError> where T: ToCanonical + SignedMut
 {
-    let sig = get_sig_for_json(&key, &obj)?;
+    let sig = sign::sign_detached(&obj.to_canonical(), &key.secret);
 
     obj.signatures_mut().add_signature(
         server_name.to_string(), key.key_id.clone(), sig

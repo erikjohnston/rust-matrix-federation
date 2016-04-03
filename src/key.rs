@@ -1,15 +1,18 @@
 //! Helper functions for the key API
 
+use std::borrow::Cow;
+
 use signedjson;
 
 use ::ser::verify_keys::VerifyKeys;
 use ::ser::signatures::Signatures;
-use ::sigs::{Signed, SignedMut};
+use ::sigs::{Signed, SignedMut, ToCanonical};
 
 use serde::de::Error;
 use serde_json;
-use serde_json::{value, builder};
+use serde_json::{ser, value, builder};
 use serde_json::error::Error as SerdeJsonError;
+
 use chrono;
 use chrono::{Timelike, TimeZone};
 
@@ -101,6 +104,20 @@ impl Signed for KeyApiResponse {
 impl SignedMut for KeyApiResponse {
     fn signatures_mut(&mut self) -> &mut Signatures {
         &mut self.signatures
+    }
+}
+
+impl ToCanonical for KeyApiResponse {
+    fn to_canonical(&self) -> Cow<[u8]> {
+        let mut value = serde_json::to_value(self);
+
+        if let Some(obj) = value.as_object_mut() {
+            obj.remove("signatures");
+            obj.remove("unsigned");
+        }
+
+        let serialized = ser::to_vec(&value).unwrap();
+        Cow::Owned(serialized)
     }
 }
 

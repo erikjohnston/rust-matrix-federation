@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::fmt::Debug;
 use std::ops::Deref;
 
@@ -16,7 +17,7 @@ pub trait SignedMut: Signed {
 }
 
 pub trait ToCanonical {
-    fn to_canonical(&self) -> &[u8];
+    fn to_canonical(&self) -> Cow<[u8]>;
 }
 
 #[derive(Debug)]
@@ -29,7 +30,7 @@ impl <T> FrozenStruct<T> where T: Debug + Signed + SignedMut + ToCanonical {
     pub fn wrap(mut inner: T) -> FrozenStruct<T> {
         inner.signatures_mut().clear();
         FrozenStruct {
-            canonical: inner.to_canonical().to_owned(),
+            canonical: inner.to_canonical().into_owned(),
             inner: inner,
         }
     }
@@ -74,8 +75,8 @@ impl <T> SignedMut for FrozenStruct<T> where T: SignedMut + Debug + Signed + Sig
 }
 
 impl <T> ToCanonical for FrozenStruct<T> where T: Debug + Signed + SignedMut {
-    fn to_canonical(&self) -> &[u8] {
-        &self.canonical
+    fn to_canonical(&self) -> Cow<[u8]> {
+        Cow::Borrowed(&self.canonical)
     }
 }
 
