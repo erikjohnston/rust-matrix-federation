@@ -4,6 +4,7 @@ use signedjson;
 
 use ::ser::verify_keys::VerifyKeys;
 use ::ser::signatures::Signatures;
+use ::sigs::{Signed, SignedMut};
 
 use serde::de::Error;
 use serde_json;
@@ -91,11 +92,13 @@ impl KeyApiResponse {
     }
 }
 
-impl signedjson::SignedStruct for KeyApiResponse {
+impl Signed for KeyApiResponse {
     fn signatures(&self) -> &Signatures {
         &self.signatures
     }
+}
 
+impl SignedMut for KeyApiResponse {
     fn signatures_mut(&mut self) -> &mut Signatures {
         &mut self.signatures
     }
@@ -104,7 +107,7 @@ impl signedjson::SignedStruct for KeyApiResponse {
 /// Generate a JSON object that satisfies a key request.
 pub fn key_server_v2_response<TZ: chrono::TimeZone>(
         key: &signedjson::SigningKey,
-        server_name: &String,
+        server_name: &str,
         valid_until: &chrono::DateTime<TZ>,
         tls_fingerprint_type: String,
         tls_fingerprint_hash: String,
@@ -127,7 +130,7 @@ pub fn key_server_v2_response<TZ: chrono::TimeZone>(
         .insert_object("old_verify_keys", |builder| builder)
         .unwrap();
 
-    signedjson::sign_json(key, server_name.clone(), val.as_object_mut().unwrap())?;
+    signedjson::sign_json(key, server_name.to_string(), val.as_object_mut().unwrap())?;
 
     Ok(val)
 }

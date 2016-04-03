@@ -23,9 +23,9 @@ impl serde::Serialize for TypedHash {
         where S: serde::Serializer
     {
 
-        let it = match self {
-            &TypedHash::Sha256(ref digest) => vec![("sha256", digest.0.to_base64(UNPADDED_BASE64))],
-            &TypedHash::Sha512(ref digest) => vec![("sha512", digest.0.to_base64(UNPADDED_BASE64))],
+        let it = match *self {
+            TypedHash::Sha256(ref digest) => vec![("sha256", digest.0.to_base64(UNPADDED_BASE64))],
+            TypedHash::Sha512(ref digest) => vec![("sha512", digest.0.to_base64(UNPADDED_BASE64))],
         }.into_iter();
 
         serializer.serialize_map(MapIteratorVisitor::new(

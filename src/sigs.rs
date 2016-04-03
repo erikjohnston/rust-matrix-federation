@@ -74,7 +74,7 @@ impl <T> SignedMut for FrozenStruct<T> where T: SignedMut + Debug + Signed + Sig
 }
 
 impl <T> ToCanonical for FrozenStruct<T> where T: Debug + Signed + SignedMut {
-    fn to_canonical<'a>(&'a self) -> &'a [u8] {
+    fn to_canonical(&self) -> &[u8] {
         &self.canonical
     }
 }

@@ -13,7 +13,7 @@ use sodiumoxide::crypto::sign;
 
 use rustc_serialize::base64::{FromBase64, ToBase64};
 
-use ::ser::signatures::Signatures;
+use ::sigs::{Signed, SignedMut};
 use ::UNPADDED_BASE64;
 
 
@@ -112,7 +112,7 @@ impl VerifyKey {
 
     pub fn from_signing_key(signing_key: &SigningKey) -> VerifyKey {
         VerifyKey {
-            public: signing_key.public.clone(),
+            public: signing_key.public,
             key_id: signing_key.key_id.clone(),
         }
     }
@@ -131,11 +131,6 @@ impl Deref for VerifyKey {
     }
 }
 
-pub trait SignedStruct {
-    fn signatures(&self) -> &Signatures;
-    fn signatures_mut(&mut self) -> &mut Signatures;
-}
-
 /// Takes a JSON object, signs it, and adds the signature to the object.
 pub fn sign_json(key: &SigningKey, entity_name: String, json: &mut Object) -> Result<(), SigningJsonError> {
     let b64sig = get_sig_for_json_b64(key, json)?;
@@ -148,7 +143,7 @@ pub fn sign_json(key: &SigningKey, entity_name: String, json: &mut Object) -> Re
 }
 
 pub fn sign_struct<T>(server_name: String, key: &SigningKey, obj: &mut T)
-    -> Result<(), SigningJsonError> where T: serde::Serialize + SignedStruct
+    -> Result<(), SigningJsonError> where T: serde::Serialize + SignedMut
 {
     let sig = get_sig_for_json(&key, &obj)?;
 
@@ -194,7 +189,7 @@ pub enum VerifyResult {
 
 
 pub fn verify_slice<S, K>(entity: &str, bytes: &[u8], signed: &S, key_store: &K)
-    -> VerifyResult where S: SignedStruct, K: KeyStore
+    -> VerifyResult where S: Signed, K: KeyStore
 {
     if let Some(domain_sigs) = signed.signatures().get(entity) {
         for (key_id, sig) in domain_sigs {
@@ -257,8 +252,8 @@ pub fn verify_sigend_json(sig: &sign::Signature, key: &VerifyKey, json: &value::
 }
 
 
-fn get_or_insert<'a>(json: &'a mut Object, s: String) -> &'a mut Object {
-    let mut val = json.entry(s).or_insert(value::Value::Object(Object::new()));
+fn get_or_insert(json: &mut Object, s: String) -> &mut Object {
+    let mut val = json.entry(s).or_insert_with(|| value::Value::Object(Object::new()));
 
     if let value::Value::Object(ref mut obj) = *val {
         obj
@@ -329,23 +324,6 @@ fn test_sign() {
         ),
         r#"{"one":1,"signatures":{"domain":{"ed25519:1":"KqmLSbO39/Bzb0QIYE82zqLwsA+PDzYIpIRA2sRQ4sL53+sN6/fpNSoqE7BP7vBZhG6kYdD13EIMJpvhJI+6Bw","ed25519:2":"ABC"}},"two":"Two"}"#
     );
-}
-
-#[test]
-fn test_get_sigs() {
-    let json = serde_json::from_slice::<value::Value>(
-        br#"{"signatures":{"domain":{"ed25519:1":"K8280/U9SSy9IVtjBuVeLr+HpOB4BQFWbg+UZaADMtTdGYI7Geitb76LTrr5QV/7Xg4ahLwYGYZzuHGZKM5ZAQ"}}}"#
-    ).unwrap();
-
-    let sigs = get_signatures(&json).unwrap();
-    assert_eq!(1, sigs.len());
-
-    let domain_sigs = sigs.get("domain").unwrap();
-    assert_eq!(1, domain_sigs.len());
-
-    let sig = domain_sigs.get("ed25519:1").unwrap();
-    let b64 = sig.0.to_base64(UNPADDED_BASE64);
-    assert_eq!(&b64, "K8280/U9SSy9IVtjBuVeLr+HpOB4BQFWbg+UZaADMtTdGYI7Geitb76LTrr5QV/7Xg4ahLwYGYZzuHGZKM5ZAQ");
 }
 
 // #[test]

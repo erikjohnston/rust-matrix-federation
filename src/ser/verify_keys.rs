@@ -40,6 +40,12 @@ impl Deref for VerifyKeys {
     }
 }
 
+impl Default for VerifyKeys {
+    fn default() -> VerifyKeys {
+        VerifyKeys::new()
+    }
+}
+
 impl serde::Serialize for VerifyKeys {
     fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
         where S: serde::Serializer
@@ -62,7 +68,7 @@ impl serde::Deserialize for VerifyKeys {
 
         let parsed_map = de_map.into_iter().map(|(key_id, key_struct)| {
             signedjson::VerifyKey::from_b64(key_struct.key.as_bytes(), key_id.clone())
-                .ok_or(D::Error::invalid_value("Invalid signature"))
+                .ok_or_else(|| D::Error::invalid_value("Invalid signature"))
                 .map(|verify_key| (key_id, verify_key) )
         }).collect()?;
 

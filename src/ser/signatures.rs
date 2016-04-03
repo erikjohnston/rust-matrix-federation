@@ -1,6 +1,7 @@
 
 use std;
 use std::collections::BTreeMap;
+use std::default::Default;
 use std::iter::Iterator;
 use std::ops::{Deref, DerefMut};
 
@@ -75,6 +76,12 @@ impl <'a, Q> std::ops::Index<&'a Q> for DomainSignatures where Q: Ord + Sized, S
     }
 }
 
+impl Default for DomainSignatures {
+    fn default() -> DomainSignatures {
+        DomainSignatures::new()
+    }
+}
+
 
 impl serde::Serialize for DomainSignatures {
     fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
@@ -100,7 +107,7 @@ impl serde::Deserialize for DomainSignatures {
             sig_b64.from_base64().ok()
                 .and_then(|slice| sign::Signature::from_slice(&slice))
                 .map(|sig| (key_id, sig))
-                .ok_or(D::Error::invalid_value("Invalid signature"))
+                .ok_or_else(|| D::Error::invalid_value("Invalid signature"))
         }).collect()?;
 
         Ok(DomainSignatures {
@@ -128,7 +135,7 @@ impl Signatures {
     }
 
     pub fn add_signature(&mut self, domain: String, key_id: String, signature: sign::Signature) {
-        self.entry(domain).or_insert(DomainSignatures::new()).insert(key_id, signature);
+        self.entry(domain).or_insert_with(DomainSignatures::new).insert(key_id, signature);
     }
 }
 
@@ -177,6 +184,12 @@ impl <'a, Q> std::ops::Index<&'a Q> for Signatures where Q: Ord + Sized, String:
     type Output = DomainSignatures;
     fn index(&self, key: &Q) -> &DomainSignatures {
         self.map.index(key)
+    }
+}
+
+impl Default for Signatures {
+    fn default() -> Signatures {
+        Signatures::new()
     }
 }
 
