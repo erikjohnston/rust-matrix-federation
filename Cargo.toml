@@ -6,12 +6,13 @@ version = "0.1.0"
 [dependencies]
 chrono = "0.2.19"
 log = "0.3.5"
-quick-error = "0.2.2"
+quick-error = "1.0.0"
 rustc-serialize = "0.3.16"
 serde = "0.7.0"
 serde_json = "0.7.0"
 serde_macros = "0.7.0"
-sodiumoxide = "0.0.9"
+sodiumoxide = "0.0.10"
 
-[dev-dependencies]
-env_logger = "0.3.2"
+[dependencies.signedjson]
+git = "https://github.com/erikjohnston/rust-signedjson.git"
+optional = false

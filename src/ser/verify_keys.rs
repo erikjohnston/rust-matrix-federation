@@ -6,7 +6,15 @@ use serde::de::Error;
 use serde::de::impls::BTreeMapVisitor;
 use serde::ser::impls::MapIteratorVisitor;
 
-use ::signedjson;
+use sodiumoxide::crypto::sign;
+
+use signedjson;
+use signedjson::keys::PublicKey;
+
+use rustc_serialize::base64::{FromBase64, ToBase64};
+
+use UNPADDED_BASE64;
+
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialEq, Eq, PartialOrd, Ord)]
 struct VerifyKeySerialized {
@@ -15,7 +23,7 @@ struct VerifyKeySerialized {
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct VerifyKeys {
-    pub map: BTreeMap<String, signedjson::VerifyKey>,
+    pub map: BTreeMap<String, sign::PublicKey>,
 }
 
 impl VerifyKeys {
@@ -25,17 +33,17 @@ impl VerifyKeys {
         }
     }
 
-    pub fn from_key(key: signedjson::VerifyKey) -> VerifyKeys {
+    pub fn from_key(key: signedjson::keys::VerifyKey) -> VerifyKeys {
         let mut map = BTreeMap::new();
-        map.insert(key.key_id.clone(), key);
+        map.insert(key.key_id.clone(), *key.public_key());
         VerifyKeys { map: map }
     }
 }
 
 impl Deref for VerifyKeys {
-    type Target = BTreeMap<String, signedjson::VerifyKey>;
+    type Target = BTreeMap<String, sign::PublicKey>;
 
-    fn deref(&self) -> &BTreeMap<String, signedjson::VerifyKey> {
+    fn deref(&self) -> &BTreeMap<String, sign::PublicKey> {
         &self.map
     }
 }
@@ -51,9 +59,7 @@ impl serde::Serialize for VerifyKeys {
         where S: serde::Serializer
     {
         serializer.serialize_map(MapIteratorVisitor::new(
-            self.iter().map(
-                |(key_id, key)| (key_id, VerifyKeySerialized { key: key.public_key_b64() })
-            ),
+            self.iter().map(|(key_id, key)| (key_id, VerifyKeySerialized{ key: key.0.to_base64(UNPADDED_BASE64) } )),
             Some(self.map.len()),
         ))
     }
@@ -67,9 +73,11 @@ impl serde::Deserialize for VerifyKeys {
         let de_map : BTreeMap<String, VerifyKeySerialized> = deserializer.deserialize(visitor)?;
 
         let parsed_map = de_map.into_iter().map(|(key_id, key_struct)| {
-            signedjson::VerifyKey::from_b64(key_struct.key.as_bytes(), key_id.clone())
-                .ok_or_else(|| D::Error::invalid_value("Invalid signature"))
-                .map(|verify_key| (key_id, verify_key) )
+            key_struct.key.as_bytes().from_base64()
+               .ok()
+               .and_then(|slice| sign::PublicKey::from_slice(&slice))
+               .ok_or_else(|| D::Error::invalid_value("Invalid signature"))
+               .map(|verify_key| (key_id, verify_key) )
         }).collect()?;
 
         Ok(VerifyKeys {
@@ -86,11 +94,13 @@ mod tests {
 
     use serde_json;
     use serde_json::error::{Error, ErrorCode};
+    use rustc_serialize::base64::ToBase64;
+    use UNPADDED_BASE64;
 
     #[test]
     fn ser() {
-        let verify_key = signedjson::VerifyKey::from_b64(
-            b"opl1tJUak+qMceFcI/PFgDRsbAkkdVsZ/Hz8wsD8cr0", "ed25519:test".to_string()
+        let verify_key = signedjson::keys::VerifyKey::from_b64(
+            b"opl1tJUak+qMceFcI/PFgDRsbAkkdVsZ/Hz8wsD8cr0", "localhost", "ed25519:test"
         ).unwrap();
 
         let keys = VerifyKeys::from_key(verify_key);
@@ -110,8 +120,7 @@ mod tests {
 
         let key = keys.get("ed25519:test").expect("A ed25519:test key");
 
-        assert_eq!(&key.key_id, "ed25519:test");
-        assert_eq!(&key.public_key_b64(), "opl1tJUak+qMceFcI/PFgDRsbAkkdVsZ/Hz8wsD8cr0");
+        assert_eq!(&key.0.to_base64(UNPADDED_BASE64), "opl1tJUak+qMceFcI/PFgDRsbAkkdVsZ/Hz8wsD8cr0");
     }
 
     #[test]
