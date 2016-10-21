@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 
 use serde;
 use serde::de::Error;
-use serde::ser::impls::MapIteratorVisitor;
 
 use sodiumoxide::crypto::hash::sha256::Digest as Sha256Digest;
 use sodiumoxide::crypto::hash::sha512::Digest as Sha512Digest;
@@ -23,15 +22,20 @@ impl serde::Serialize for TypedHash {
         where S: serde::Serializer
     {
 
-        let it = match *self {
-            TypedHash::Sha256(ref digest) => vec![("sha256", digest.0.to_base64(UNPADDED_BASE64))],
-            TypedHash::Sha512(ref digest) => vec![("sha512", digest.0.to_base64(UNPADDED_BASE64))],
-        }.into_iter();
+        let mut state = try!(serializer.serialize_map(Some(1)));
 
-        serializer.serialize_map(MapIteratorVisitor::new(
-            it,
-            Some(1),
-        ))
+        match *self {
+            TypedHash::Sha256(ref digest) => {
+                serializer.serialize_map_key(&mut state, "sha256")?;
+                serializer.serialize_map_value(&mut state, digest.0.to_base64(UNPADDED_BASE64))?;
+            }
+            TypedHash::Sha512(ref digest) => {
+                serializer.serialize_map_key(&mut state, "sha512")?;
+                serializer.serialize_map_value(&mut state, digest.0.to_base64(UNPADDED_BASE64))?;
+            }
+        }
+
+        serializer.serialize_map_end(state)
     }
 }
 

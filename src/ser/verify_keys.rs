@@ -3,8 +3,6 @@ use std::ops::Deref;
 
 use serde;
 use serde::de::Error;
-use serde::de::impls::BTreeMapVisitor;
-use serde::ser::impls::MapIteratorVisitor;
 
 use sodiumoxide::crypto::sign;
 
@@ -58,10 +56,12 @@ impl serde::Serialize for VerifyKeys {
     fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
         where S: serde::Serializer
     {
-        serializer.serialize_map(MapIteratorVisitor::new(
-            self.iter().map(|(key_id, key)| (key_id, VerifyKeySerialized{ key: key.0.to_base64(UNPADDED_BASE64) } )),
-            Some(self.map.len()),
-        ))
+        let mut state = try!(serializer.serialize_map(Some(self.len())));
+        for (k, v) in &self.map {
+            try!(serializer.serialize_map_key(&mut state, k));
+            try!(serializer.serialize_map_value(&mut state, VerifyKeySerialized{ key: v.0.to_base64(UNPADDED_BASE64) }));
+        }
+        serializer.serialize_map_end(state)
     }
 }
 
@@ -69,19 +69,20 @@ impl serde::Deserialize for VerifyKeys {
     fn deserialize<D>(deserializer: &mut D) -> Result<VerifyKeys, D::Error>
         where D: serde::Deserializer,
     {
-        let visitor = BTreeMapVisitor::new();
-        let de_map : BTreeMap<String, VerifyKeySerialized> = deserializer.deserialize(visitor)?;
+        let de_map: BTreeMap<String, VerifyKeySerialized> = BTreeMap::deserialize(deserializer)?;
 
-        let parsed_map = de_map.into_iter().map(|(key_id, key_struct)| {
-            key_struct.key.as_bytes().from_base64()
-               .ok()
-               .and_then(|slice| sign::PublicKey::from_slice(&slice))
-               .ok_or_else(|| D::Error::invalid_value("Invalid signature"))
-               .map(|verify_key| (key_id, verify_key) )
-        }).collect()?;
+        let parsed_map: Result<_, D::Error> = de_map.into_iter().map(|(key_id, key_struct)| {
+            let key_opt = key_struct.key.as_bytes().from_base64().ok()
+                .and_then(|slice| sign::PublicKey::from_slice(&slice));
+            if let Some(key) = key_opt {
+                Ok((key_id, key))
+            } else {
+                Err(D::Error::invalid_value("Invalid signature"))
+            }
+        }).collect();
 
         Ok(VerifyKeys {
-            map: parsed_map,
+            map: parsed_map?,
         })
     }
 }

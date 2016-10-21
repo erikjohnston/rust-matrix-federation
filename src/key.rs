@@ -10,13 +10,12 @@ use signedjson::ser::signatures::Base64Signature;
 
 use ::ser::verify_keys::VerifyKeys;
 
-use serde::de::Error;
 use serde_json;
 use serde_json::ser;
 use serde_json::error::Error as SerdeJsonError;
 
 use chrono;
-use chrono::{Timelike, TimeZone};
+use chrono::Timelike;
 
 
 quick_error! {
@@ -59,7 +58,7 @@ impl KeyApiResponse {
             server_name: server_name.to_string(),
             valid_until_ts: valid_until_ts as u64,
             verify_keys: VerifyKeys::from_key(
-                signedjson::keys::VerifyKey::from_signing_key(&key)
+                signedjson::keys::VerifyKey::from_signing_key(key)
             ),
             tls_fingerprints: vec![TlsFingerprint { sha256: tls_fingerprint_sha256 }],
             old_verify_keys: VerifyKeys::new(),
@@ -83,7 +82,7 @@ impl KeyApiResponse {
             server_name: server_name.to_string(),
             valid_until_ts: valid_until_ts as u64,
             verify_keys: VerifyKeys::from_key(
-                signedjson::keys::VerifyKey::from_signing_key(&key)
+                signedjson::keys::VerifyKey::from_signing_key(key)
             ),
             tls_fingerprints: vec![TlsFingerprint { sha256: tls_fingerprint_sha256 }],
             old_verify_keys: VerifyKeys::new(),
